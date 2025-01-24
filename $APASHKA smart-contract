@@ -1,31 +1,25 @@
-icense-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 
 contract ApashkaToken is ERC20, ERC20Burnable, Ownable {
-    // Lock information for team tokensS
-    uint256 public constant TEAM_LOCK_DURATION = 5 * 30 days; // 5 months
+    uint256 public constant TEAM_LOCK_DURATION = 5 * 30 days;
     uint256 public teamUnlockTime;
     uint256 public teamTokens;
-
-    mapping(address => uint256) public stakingBalance;
-    mapping(address => uint256) public lastClaimTime;
-    uint256 public rewardRate = 10; // Reward rate (e.g., 10 APASHKA per day per token staked)
 
     constructor() ERC20("ApashkaToken", "$APASHKA") {
         uint256 totalSupply = 10_000_000_000 * 10 ** decimals();
         _mint(msg.sender, totalSupply);
 
-        // Lock team tokens
-        teamTokens = totalSupply / 10; // 10% of total supply for the team
+        teamTokens = totalSupply / 10;
         teamUnlockTime = block.timestamp + TEAM_LOCK_DURATION;
+
+        _transfer(msg.sender, address(this), teamTokens);
     }
 
-    // Function to claim locked team tokens
     function claimTeamTokens() external onlyOwner {
         require(block.timestamp >= teamUnlockTime, "Team tokens are still locked");
         require(teamTokens > 0, "Team tokens already claimed");
@@ -33,50 +27,4 @@ contract ApashkaToken is ERC20, ERC20Burnable, Ownable {
         _transfer(address(this), msg.sender, teamTokens);
         teamTokens = 0;
     }
-
-    // Staking functionality
-    function stakeTokens(uint256 _amount) external {
-        require(balanceOf(msg.sender) >= _amount, "Insufficient balance to stake");
-        
-        // Transfer tokens to the contract for staking
-        _transfer(msg.sender, address(this), _amount);
-        stakingBalance[msg.sender] += _amount;
-        
-        // Update last claim time
-        lastClaimTime[msg.sender] = block.timestamp;
-    }
-
-    function unstakeTokens(uint256 _amount) external {
-        require(stakingBalance[msg.sender] >= _amount, "Insufficient staked balance to unstake");
-
-        // Claim rewards before unstaking
-        claimRewards();
-
-        // Update staking balance and transfer tokens back to the user
-        stakingBalance[msg.sender] -= _amount;
-        _transfer(address(this), msg.sender, _amount);
-    }
-
-    function claimRewards() public {
-        uint256 rewards = calculateRewards(msg.sender);
-        require(rewards > 0, "No rewards to claim");
-
-        // Mint rewards and reset last claim time
-        _mint(msg.sender, rewards);
-        lastClaimTime[msg.sender] = block.timestamp;
-    }
-
-    function calculateRewards(address _user) public view returns (uint256) {
-        uint256 stakedAmount = stakingBalance[_user];
-        uint256 timeElapsed = block.timestamp - lastClaimTime[_user];
-
-        return (stakedAmount * rewardRate * timeElapsed) / 1 days;
-    }
-
-    // Override transfer functions to ensure team tokens cannot be transferred before unlock
-    function _transfer(address sender, address recipient, uint256 amount) internal override {
-        if (sender == address(this) && block.timestamp < teamUnlockTime) {
-            require(teamTokens == 0, "Team tokens are locked and cannot be transferred");
-        }
-        super._transfer(sender, recipient, amount);
-    }
+}
